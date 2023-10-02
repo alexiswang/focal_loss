@@ -1,12 +1,12 @@
 import lightgbm
 from lightgbm import LGBMModel
-from lightgbm.compat import SKLEARN_INSTALLED, LGBMNotFittedError, _LGBMClassifierBase
+from lightgbm.compat import LGBMNotFittedError, _LGBMClassifierBase
 from lightgbm.callback import _EvalResultDict, record_evaluation
-
 
 import numpy as np
 from scipy import optimize
 from scipy import special
+
 
 class FocalLoss:
 
@@ -18,7 +18,7 @@ class FocalLoss:
         if self.alpha is None:
             return np.ones_like(y)
         return np.where(y, self.alpha, 1 - self.alpha)
-    
+
     def pt(self, y, p):
         p = np.clip(p, 1e-15, 1 - 1e-15)
         return np.where(y, p, 1 - p)
@@ -70,11 +70,9 @@ class FocalLoss:
         return 'focal_loss', self(y, p).mean(), is_higher_better
 
 
-
-
-
 class CustomLGBMClassifier(_LGBMClassifierBase, LGBMModel):
-
+    """" Implementation of LGBMClassifier with Focal Loss 
+    """
 
     def __is_fitted__(self):
         return getattr(self, "fitted_", False)
@@ -87,10 +85,8 @@ class CustomLGBMClassifier(_LGBMClassifierBase, LGBMModel):
             params.update({"obj_alpha": self.obj_alpha})
         if hasattr(self, "obj_gamma"):
             params.update({"obj_gamma": self.obj_gamma})        
-        # self.objective = params["objective"] = FocalLoss().lgb_obj  
-        #      
+     
         return params
-
 
     def set_params(self, **params):
         for key, value in params.items():
@@ -108,26 +104,24 @@ class CustomLGBMClassifier(_LGBMClassifierBase, LGBMModel):
 
         if "obj_alpha" not in params.keys():
             self.obj_alpha = params["obj_alpha"] = None
-        if  "obj_gamma" not in params.keys():
+        if "obj_gamma" not in params.keys():
             self.obj_gamma = params["obj_gamma"] = 0
 
         if stage == "fit":
             params["objective"] = FocalLoss(alpha=params["obj_alpha"], gamma=params["obj_gamma"]).lgb_obj
             params["random_seed"] = 0
-        
-        
+               
         self.eval_metric = FocalLoss(alpha=params["obj_alpha"], gamma=params["obj_gamma"]).lgb_eval
 
         return params
 
-
     def fit(self, X, y, eval_set=None, callbacks=None):
         
+        params = self._process_params(stage="fit")
+
         self.init_score = FocalLoss(alpha=self.obj_alpha, gamma=self.obj_gamma).init_score(y)
         init_scores = np.full_like(y, self.init_score, dtype=float)
         train_set = lightgbm.Dataset(data=X, label=y, init_score=init_scores)
-
-        params = self._process_params(stage="fit")
 
         valid_sets = []
         if eval_set is not None:
@@ -144,15 +138,14 @@ class CustomLGBMClassifier(_LGBMClassifierBase, LGBMModel):
         if callbacks is None:
             callbacks = []
 
-        evals_result: _EvalResultDict={}
+        evals_result: _EvalResultDict = {}
         callbacks.append(record_evaluation(evals_result))
-
         
         self._Booster = lightgbm.train(
-            params=params, 
-            train_set=train_set, 
-            valid_sets=valid_sets, 
-            feval=self.eval_metric, 
+            params=params,
+            train_set=train_set,
+            valid_sets=valid_sets,
+            feval=self.eval_metric,
             callbacks=callbacks)
         
         self._evals_result = evals_result
@@ -173,6 +166,4 @@ class CustomLGBMClassifier(_LGBMClassifierBase, LGBMModel):
         if not self.__sklearn_is_fitted__():
             raise LGBMNotFittedError('No classes found. Need to call fit beforehand.')
         return self._classes  # type: ignore[return-value]
-
-
-    
+  
