@@ -166,4 +166,11 @@ class CustomLGBMClassifier(_LGBMClassifierBase, LGBMModel):
         if not self.__sklearn_is_fitted__():
             raise LGBMNotFittedError('No classes found. Need to call fit beforehand.')
         return self._classes  # type: ignore[return-value]
+
+    @property
+    def classes_(self) -> np.ndarray:
+        """:obj:`array` of shape = [n_classes]: The class label array."""
+        if not self.__sklearn_is_fitted__():
+            raise LGBMNotFittedError('No classes found. Need to call fit beforehand.')
+        return self._classes  # type: ignore[return-value]
   
